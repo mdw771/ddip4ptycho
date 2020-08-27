@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 import skvideo.io
+import dxchange
 
 matplotlib.use('agg')
 
@@ -126,6 +127,9 @@ def plot_image_grid(name, images_np, interpolation='lanczos', output_path="outpu
 def save_image(name, image_np, output_path="output/"):
     p = np_to_pil(image_np)
     p.save(output_path + "{}.jpg".format(name))
+
+def save_tiff(name, image_np, output_path="output/"):
+    dxchange.write_tiff(image_np, output_path + "{}".format(name), dtype='float32', overwrite=True)
 
 def video_to_images(file_name, name):
     video = prepare_video(file_name)

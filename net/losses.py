@@ -67,8 +67,8 @@ class ExclusionLoss(nn.Module):
 
     def _all_comb(self, grad1_s, grad2_s):
         v = []
-        for i in range(3):
-            for j in range(3):
+        for i in range(grad1_s.shape[1]):
+            for j in range(grad2_s.shape[1]):
                 v.append(torch.mean(((grad1_s[:, j, :, :] ** 2) * (grad2_s[:, i, :, :] ** 2))) ** 0.25)
         return v
 

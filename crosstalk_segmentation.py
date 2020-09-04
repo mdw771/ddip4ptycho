@@ -8,6 +8,7 @@ from net.downsampler import *
 from skimage.measure import compare_psnr
 from cv2.ximgproc import guidedFilter
 import dxchange
+import os
 
 SegmentationResult = namedtuple("SegmentationResult", ['mask', 'learned_mask', 'left', 'right', 'psnr'])
 
@@ -18,7 +19,7 @@ class Segmentation(object):
                  second_step_iter_num=4000,
                  bg_hint=None, fg_hint=None,
                  show_every=500,
-                 downsampling_factor=0.1, downsampling_number=0):
+                 downsampling_factor=0.1, downsampling_number=0, output_folder='seg_multislice'):
         self.image = image
         if bg_hint is None or fg_hint is None: 
             raise Exception("Hints must be provided")
@@ -56,12 +57,15 @@ class Segmentation(object):
         self.current_result = None
         self.best_result = None
         self.learning_rate = 0.001
+        self.output_folder = output_folder
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
         self._init_all()
 
     def _init_nets(self):
         pad = 'reflection'
         left_net = skip(
-            self.input_depth, 3,
+            self.input_depth, 1,
             num_channels_down=[8, 16, 32],
             num_channels_up=[8, 16, 32],
             num_channels_skip=[0, 0, 0],
@@ -73,7 +77,7 @@ class Segmentation(object):
         self.left_net = left_net.type(torch.cuda.FloatTensor)
 
         right_net = skip(
-            self.input_depth, 3,
+            self.input_depth, 1,
             num_channels_down=[8, 16, 32],
             num_channels_up=[8, 16, 32],
             num_channels_skip=[0, 0, 0],
@@ -184,20 +188,20 @@ class Segmentation(object):
     def finalize_first_step(self):
         left = torch_to_np(self.left_net_outputs[0])
         right = torch_to_np(self.right_net_outputs[0])
-        save_image(self.image_name + "_1_left", left)
-        save_image(self.image_name + "_1_right", right)
-        save_image(self.image_name + "_hint1", self.bg_hint)
-        save_image(self.image_name + "_hint2", self.fg_hint)
-        save_image(self.image_name + "_hint1_masked", self.bg_hint * self.image)
-        save_image(self.image_name + "_hint2_masked", self.fg_hint * self.image)
+        save_tiff(self.image_name + "_1_left", left, output_path=self.output_folder)
+        save_tiff(self.image_name + "_1_right", right, output_path=self.output_folder)
+        save_tiff(self.image_name + "_hint1", self.bg_hint, output_path=self.output_folder)
+        save_tiff(self.image_name + "_hint2", self.fg_hint, output_path=self.output_folder)
+        save_tiff(self.image_name + "_hint1_masked", self.bg_hint * self.image, output_path=self.output_folder)
+        save_tiff(self.image_name + "_hint2_masked", self.fg_hint * self.image, output_path=self.output_folder)
 
     def finalize(self):
-        save_image(self.image_name + "_left", self.best_result.left)
-        save_image(self.image_name + "_learned_mask", self.best_result.learned_mask)
-        save_image(self.image_name + "_right", self.best_result.right)
-        save_image(self.image_name + "_original", self.images[0])
+        save_tiff(self.image_name + "_left", self.best_result.left, output_path=self.output_folder)
+        save_tiff(self.image_name + "_learned_mask", self.best_result.learned_mask, output_path=self.output_folder)
+        save_tiff(self.image_name + "_right", self.best_result.right, output_path=self.output_folder)
+        save_tiff(self.image_name + "_original", self.images[0], output_path=self.output_folder)
         # save_image(self.image_name + "_fg_bg", ((self.fg_hint - self.bg_hint) + 1) / 2)
-        save_image(self.image_name + "_mask", self.best_result.mask)
+        save_tiff(self.image_name + "_mask", self.best_result.mask, output_path=self.output_folder)
 
     def _update_result_closure(self):
         self._finalize_iteration()
@@ -356,12 +360,10 @@ class Segmentation(object):
         if self.current_gradient is not None:
             print('Iteration {:5d} total_loss {:5f} grad {:5f} PSNR {:5f} '.format(iter_number, self.total_loss.item(),
                                                                                    self.current_gradient.item(),
-                                                                                   self.current_psnr),
-                  '\r', end='')
+                                                                                   self.current_psnr))
         else:
             print('Iteration {:5d} total_loss {:5f} PSNR {:5f} '.format(iter_number, self.total_loss.item(),
-                                                                        self.current_psnr),
-                  '\r', end='')
+                                                                        self.current_psnr))
         if iter_number % self.show_every == self.show_every - 1:
             self._plot_with_name(iter_number)
 
@@ -377,29 +379,42 @@ class Segmentation(object):
         if self.fg_hint is not None and self.bg_hint is not None:
             plot_image_grid("left_right_hints_{}".format(name),
                             [np.clip(self.fg_hint, 0, 1),
-                             np.clip(self.bg_hint, 0, 1)])
+                             np.clip(self.bg_hint, 0, 1)], output_path=self.output_folder)
         for i, (left_out, right_out, mask_out, image) in enumerate(zip(self.left_net_outputs,
                                                                        self.right_net_outputs,
                                                                        self.mask_net_outputs, self.images)):
             plot_image_grid("left_right_{}_{}".format(name, i),
                             [np.clip(torch_to_np(left_out), 0, 1),
-                             np.clip(torch_to_np(right_out), 0, 1)])
+                             np.clip(torch_to_np(right_out), 0, 1)], output_path=self.output_folder)
             mask_out_np = torch_to_np(mask_out)
             plot_image_grid("learned_mask_{}_{}".format(name, i),
-                            [np.clip(mask_out_np, 0, 1), 1 - np.clip(mask_out_np, 0, 1)])
+                            [np.clip(mask_out_np, 0, 1), 1 - np.clip(mask_out_np, 0, 1)], output_path=self.output_folder)
 
             plot_image_grid("learned_image_{}_{}".format(name, i),
                             [np.clip(mask_out_np * torch_to_np(left_out) + (1 - mask_out_np) * torch_to_np(right_out),
-                                     0, 1), image])
+                                     0, 1), image], output_path=self.output_folder)
+
+def normalize(img):
+    img = (img - np.mean(img)) / np.std(img)
+    img = (img - img.min()) / (img.max() - img.min())
+    return img
 
 if __name__ == "__main__":
+
     img = dxchange.read_tiff('data/au_ni.tiff')
     img = img[114:114+272, 114:-114, :]
     img = np.transpose(img, (2, 0, 1))
+    img = normalize(img)
     input1 = img[0].reshape([1, *img[0].shape])
     input2 = img[1].reshape([1, *img[1].shape])
 
+    mask = dxchange.read_tiff('data/mask.tiff')
+    mask = mask[114:114+272, 114:-114, :]
+    mask = np.transpose(mask, (2, 0, 1))
+    mask1 = mask[0].reshape([1, *mask[0].shape])
+    mask2 = mask[1].reshape([1, *mask[1].shape])
+
     # Separation from two images
-    t = Segmentation('input2', input2)
+    t = Segmentation('input2', input2, fg_hint=mask2, bg_hint=1 - mask2, output_folder='seg_multislice_slc2/', first_step_iter_num=8000)
     t.optimize()
     t.finalize()

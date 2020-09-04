@@ -7,7 +7,7 @@ from torch.nn import functional
 
 
 class StdLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, dtype=torch.cuda.FloatTensor):
         """
         Loss on the variance of the image.
         Works in the grayscale.
@@ -17,11 +17,11 @@ class StdLoss(nn.Module):
         blur = (1 / 25) * np.ones((5, 5))
         blur = blur.reshape(1, 1, blur.shape[0], blur.shape[1])
         self.mse = nn.MSELoss()
-        self.blur = nn.Parameter(data=torch.cuda.FloatTensor(blur), requires_grad=False)
+        self.blur = nn.Parameter(data=dtype(blur), requires_grad=False)
         image = np.zeros((5, 5))
         image[2, 2] = 1
         image = image.reshape(1, 1, image.shape[0], image.shape[1])
-        self.image = nn.Parameter(data=torch.cuda.FloatTensor(image), requires_grad=False)
+        self.image = nn.Parameter(data=dtype(image), requires_grad=False)
         self.gray_scale = GrayscaleLayer()
 
     def forward(self, x):
@@ -31,15 +31,16 @@ class StdLoss(nn.Module):
 
 class ExclusionLoss(nn.Module):
 
-    def __init__(self, level=3):
+    def __init__(self, level=5, dtype=torch.cuda.FloatTensor):
         """
         Loss on the gradient. based on:
         http://openaccess.thecvf.com/content_cvpr_2018/papers/Zhang_Single_Image_Reflection_CVPR_2018_paper.pdf
         """
         super(ExclusionLoss, self).__init__()
         self.level = level
-        self.avg_pool = torch.nn.AvgPool2d(2, stride=2).type(torch.cuda.FloatTensor)
-        self.sigmoid = nn.Sigmoid().type(torch.cuda.FloatTensor)
+        self.avg_pool = torch.nn.AvgPool2d(2, stride=2).type(dtype)
+        self.sigmoid = nn.Sigmoid().type(dtype)
+        self.step = 0
 
     def get_gradients(self, img1, img2):
         gradx_loss = []
@@ -61,6 +62,12 @@ class ExclusionLoss(nn.Module):
             # grady_loss.append(torch.mean(((grady1_s ** 2) * (grady2_s ** 2))) ** 0.25)
             gradx_loss += self._all_comb(gradx1_s, gradx2_s)
             grady_loss += self._all_comb(grady1_s, grady2_s)
+            # if self.step % 500 == 0:
+            #     import dxchange
+            #     dxchange.write_tiff(torch_to_np(gradx1_s[0]), 'debug/gradx1_s_{}'.format(self.step))
+            #     dxchange.write_tiff(torch_to_np(gradx2_s[0]), 'debug/gradx2_s_{}'.format(self.step))
+            #     dxchange.write_tiff(torch_to_np(grady1_s[0]), 'debug/grady1_s_{}'.format(self.step))
+            #     dxchange.write_tiff(torch_to_np(grady2_s[0]), 'debug/grady2_s_{}'.format(self.step))
             img1 = self.avg_pool(img1)
             img2 = self.avg_pool(img2)
         return gradx_loss, grady_loss
@@ -69,12 +76,15 @@ class ExclusionLoss(nn.Module):
         v = []
         for i in range(grad1_s.shape[1]):
             for j in range(grad2_s.shape[1]):
-                v.append(torch.mean(((grad1_s[:, j, :, :] ** 2) * (grad2_s[:, i, :, :] ** 2))) ** 0.25)
+                nom = torch.mean(((grad1_s[:, j, :, :] ** 2) * (grad2_s[:, i, :, :] ** 2))) ** 0.25
+                # denom = (torch.std(grad1_s[:, j, :, :] ** 2) * torch.std(grad2_s[:, i, :, :] ** 2)) ** 0.25
+                v.append(nom)
         return v
 
     def forward(self, img1, img2):
         gradx_loss, grady_loss = self.get_gradients(img1, img2)
         loss_gradxy = sum(gradx_loss) / (self.level * 9) + sum(grady_loss) / (self.level * 9)
+        self.step += 1
         return loss_gradxy / 2.0
 
     def compute_gradient(self, img):

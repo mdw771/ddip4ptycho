@@ -49,21 +49,3 @@ if __name__ == "__main__":
                                 input_type='noise', gamma_excl=4e-1, gamma_reg=0.5, blur=True, blur_type='blur', device=device)
         t.optimize()
         t.finalize()
-
-    # # Separation from two images
-    # init1 = np.squeeze(dxchange.read_tiff('/data/programs/DoubleDIP/output_multislice_constant_alpha_blur_1_rep0/reflection_2499.tiff'))
-    # init2 = np.squeeze(dxchange.read_tiff('/data/programs/DoubleDIP/output_multislice_constant_alpha_blur_1_rep0/transmission_2499.tiff'))
-    # init1 = init1.reshape([1, *init1.shape])
-    # init2 = init2.reshape([1, *init2.shape])
-    # for i_repeat in range(10):
-    #     t = TwoImagesSeparation('input1', 'input2', input1, input2, num_iter=30000, init=[init1, init2],
-    #                             output_folder='output_multislice_constant_alpha_blur_1_supp_rep{}/'.format(i_repeat),
-    #                             input_type='supplied', gamma_excl=1, blur=True, device=device, learning_rate=1e-4)
-    #     t.optimize()
-    #     t.finalize()
-
-    # t = TwoImagesSeparation('input1', 'input2', input1, input2, num_iter=10000,
-    #                         output_folder='output_multislice_constant_alpha_blur_10_ramp/', input_type='meshgrid',
-    #                         gamma_excl=10, blur=True, device=device)
-    # t.optimize()
-    # t.finalize()

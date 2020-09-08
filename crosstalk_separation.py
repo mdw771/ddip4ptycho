@@ -59,7 +59,7 @@ class TwoImagesSeparation(object):
         self.low_pass_kernel_2 = None
         self.filter_net1 = None
         self.filter_net2 = None
-        self.dtype = torch.cuda.DoubleTensor if (self.device is not None) else torch.FloatTensor
+        self.dtype = torch.cuda.FloatTensor if (self.device is not None) else torch.FloatTensor
         self.dtype_str = 'float64' if self.dtype == torch.cuda.DoubleTensor else 'float32'
         if init is not None:
             self.init1 = init[0]

@@ -16,10 +16,8 @@ from crosstalk_separation import *
 
 if __name__ == "__main__":
 
-    input1 = dxchange.read_tiff('data/zp_0.tiff')
-    input2 = dxchange.read_tiff('data/zp_1.tiff')
-    img = np.stack([input1, input2], axis=2)
-    img = img[169:617, 169:617, :]
+    img = dxchange.read_tiff('data/au_ni.tiff')
+    img = img[114:114+272, 114:-114, :]
     img = np.transpose(img, (2, 0, 1))
     img = normalize(img)
 
@@ -45,8 +43,8 @@ if __name__ == "__main__":
     #                   reg_threshold = 100 iters
     for i_repeat in range(0, 1):
         t = TwoImagesSeparation('input1', 'input2', input1, input2, num_iter=10000,
-                                output_folder='zp/output_multislice_constant_alpha_blur_4e-1_rep{}/'.format(i_repeat), learning_rate=1e-3,
-                                input_type='noise', gamma_excl=4e-1, gamma_reg=0.5, blur=True, blur_type='blur', device=device)
+                                output_folder='auni/output_multislice_constant_alpha_blur_1e-1_rep{}/'.format(i_repeat), learning_rate=1e-3,
+                                input_type='noise', gamma_excl=1e-1, gamma_reg=0.5, blur=True, blur_type='blur', device=device)
         t.optimize()
         t.finalize()
 

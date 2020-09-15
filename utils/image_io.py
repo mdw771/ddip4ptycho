@@ -334,7 +334,7 @@ def np_to_pil(img_np):
     return Image.fromarray(ar)
 
 
-def np_to_torch(img_np):
+def np_to_torch(img_np, newaxis=True):
     """
     Converts image in numpy.array to torch.Tensor.
 
@@ -343,10 +343,13 @@ def np_to_torch(img_np):
     :param img_np:
     :return:
     """
-    return torch.from_numpy(img_np)[None, :]
+    if newaxis:
+        return torch.from_numpy(img_np)[None, :]
+    else:
+        return torch.from_numpy(img_np)
 
 
-def torch_to_np(img_var):
+def torch_to_np(img_var, first_only=True):
     """
     Converts an image in torch.Tensor format to np.array.
 
@@ -354,4 +357,7 @@ def torch_to_np(img_var):
     :param img_var:
     :return:
     """
-    return img_var.detach().cpu().numpy()[0]
+    if first_only:
+        return img_var.detach().cpu().numpy()[0]
+    else:
+        return img_var.detach().cpu().numpy()

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from utils.image_io import np_to_torch
 
 
-def get_noise(input_depth, method, spatial_size, noise_type='u', var=1. / 100):
+def get_noise(input_depth, method, spatial_size, noise_type='u', var=1. / 100, n_images=1):
     """
     Returns a pytorch.Tensor of size (1 x `input_depth` x `spatial_size[0]` x `spatial_size[1]`)
     initialized in a specific way.
@@ -20,7 +20,7 @@ def get_noise(input_depth, method, spatial_size, noise_type='u', var=1. / 100):
     if isinstance(spatial_size, int):
         spatial_size = (spatial_size, spatial_size)
     if method == 'noise':
-        shape = [1, input_depth, spatial_size[0], spatial_size[1]]
+        shape = [n_images, input_depth, spatial_size[0], spatial_size[1]]
         net_input = torch.zeros(shape)
 
         fill_noise(net_input, noise_type)

@@ -117,25 +117,20 @@ class TwoImagesSeparation(object):
         if self.input_type == 'supplied':
             self.reflection_net_input = np_to_torch(self.init1).type(self.dtype)
             self.transmission_net_input = np_to_torch(self.init2).type(self.dtype)
-            self.alpha_net1_input = get_noise(self.input_depth, 'noise',
-                                                  (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
-            self.alpha_net2_input = get_noise(self.input_depth, 'noise',
-                                              (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
+            self.alpha_net_input = get_noise(1, 'noise',
+                                             (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
         else:
             self.reflection_net_input = get_noise(self.input_depth, self.input_type,
                                                   (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
-            self.alpha_net1_input = get_noise(self.input_depth, self.input_type,
-                                                  (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
-            self.alpha_net2_input = get_noise(self.input_depth, self.input_type,
-                                              (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
+            self.alpha_net_input = get_noise(2, self.input_type,
+                                             (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
             self.transmission_net_input = get_noise(self.input_depth, self.input_type,
                                                   (self.image1.shape[1], self.image1.shape[2])).type(data_type).detach()
 
     def _init_parameters(self):
         self.parameters = [p for p in self.reflection_net.parameters()] + \
                           [p for p in self.transmission_net.parameters()]
-        self.parameters += [p for p in self.alpha1.parameters()]
-        self.parameters += [p for p in self.alpha2.parameters()]
+        self.parameters += [p for p in self.alpha.parameters()]
         if self.low_pass_kernel_1 is not None:
             self.parameters += [self.low_pass_kernel_1, self.low_pass_kernel_2]
         elif self.filter_net1 is not None:
@@ -154,6 +149,7 @@ class TwoImagesSeparation(object):
             filter_size_down=5,
             filter_size_up=5,
             need_sigmoid=True, need_bias=True, pad=pad, act_fun='LeakyReLU')
+        print(reflection_net)
 
         self.reflection_net = reflection_net.type(data_type)
 
@@ -168,8 +164,8 @@ class TwoImagesSeparation(object):
             need_sigmoid=True, need_bias=True, pad=pad, act_fun='LeakyReLU')
 
         self.transmission_net = transmission_net.type(data_type)
-        alpha_net1 = skip(
-            self.input_depth, 1,
+        alpha_net = skip(
+            2, 2,
             num_channels_down=[8, 16, 32, 64, 128],
             num_channels_up=[8, 16, 32, 64, 128],
             num_channels_skip=[0, 0, 0, 4, 4],
@@ -178,19 +174,7 @@ class TwoImagesSeparation(object):
             filter_size_up=5,
             need_sigmoid=True, need_bias=True, pad=pad, act_fun='LeakyReLU')
 
-        self.alpha1 = alpha_net1.type(data_type)
-
-        alpha_net2 = skip(
-            self.input_depth, 1,
-            num_channels_down=[8, 16, 32, 64, 128],
-            num_channels_up=[8, 16, 32, 64, 128],
-            num_channels_skip=[0, 0, 0, 4, 4],
-            upsample_mode='bilinear',
-            filter_size_down=5,
-            filter_size_up=5,
-            need_sigmoid=True, need_bias=True, pad=pad, act_fun='LeakyReLU')
-
-        self.alpha2 = alpha_net2.type(data_type)
+        self.alpha = alpha_net.type(data_type)
 
     def _init_losses(self):
         data_type = self.dtype
@@ -223,25 +207,24 @@ class TwoImagesSeparation(object):
 
         self.reflection_out = self.reflection_net(reflection_net_input)
         self.transmission_out = self.transmission_net(transmission_net_input)
-        alpha_net_input = self.alpha_net1_input + (self.alpha_net1_input.clone().normal_() * reg_noise_std)
+        alpha_net_input = self.alpha_net_input + (self.alpha_net_input.clone().normal_() * reg_noise_std)
         if self.constant_alpha:
-            self.current_alpha1 = self.alpha1(alpha_net_input)[:, :,
+            self.current_alpha = self.alpha(alpha_net_input)
+            self.current_alpha1 = self.current_alpha[:, 0:1,
+                                 self.image1_torch.shape[2] // 2:self.image1_torch.shape[2] // 2 + 1,
+                                 self.image1_torch.shape[3] // 2:self.image1_torch.shape[3] // 2 + 1] * 0.9 + 0.05
+            self.current_alpha2 = self.current_alpha[:, 1:2,
                                  self.image1_torch.shape[2] // 2:self.image1_torch.shape[2] // 2 + 1,
                                  self.image1_torch.shape[3] // 2:self.image1_torch.shape[3] // 2 + 1] * 0.9 + 0.05
         else:
-            self.current_alpha1 = self.alpha1(alpha_net_input)
+            self.current_alpha = self.alpha(alpha_net_input)
+            self.current_alpha1 = self.current_alpha[:, 0:1, :, :]
+            self.current_alpha2 = self.current_alpha[:, 1:2, :, :]
 
         # print(reflection_net_input.shape, self.reflection_out.shape)
         # print(transmission_net_input.shape, self.transmission_out.shape)
         # print(self.current_alpha1.shape, alpha_net_input.shape)
 
-        alpha_net_input = self.alpha_net2_input + (self.alpha_net2_input.clone().normal_() * reg_noise_std)
-        if self.constant_alpha:
-            self.current_alpha2 = self.alpha2(alpha_net_input)[:, :,
-                                  self.image1_torch.shape[2] // 2:self.image1_torch.shape[2] // 2 + 1,
-                                  self.image1_torch.shape[3] // 2:self.image1_torch.shape[3] // 2 + 1]* 0.9 + 0.05
-        else:
-            self.current_alpha2 = self.alpha2(alpha_net_input)
         if self.low_pass_kernel_1 is not None:
             self.pred1 = self.current_alpha1 * self.reflection_out + \
                          (1 - self.current_alpha1) * torch.nn.functional.conv2d(self.transmission_out, self.low_pass_kernel_1, padding=self.low_pass_kernel_1.shape[-1] // 2)
@@ -330,6 +313,8 @@ class TwoImagesSeparation(object):
                           output_path=self.output_folder)
                 save_tiff("kernel2_{}".format(step), np.squeeze(self.current_result.kernel2),
                           output_path=self.output_folder)
+            np.savetxt(os.path.join(self.output_folder, 'alpha_{}'.format(step)),
+                       [np.squeeze(self.current_result.alpha1), np.squeeze(self.current_result.alpha2)], fmt='%.3f')
 
 
     def finalize(self):

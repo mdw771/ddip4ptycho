@@ -29,7 +29,7 @@ if __name__ == "__main__":
     input1 = img[0].reshape([1, *img[0].shape])
     input2 = img[1].reshape([1, *img[1].shape])
 
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     torch.cuda.set_device(device)
 
     # device = None
@@ -43,8 +43,8 @@ if __name__ == "__main__":
     #                   reg_threshold = 100 iters
     for i_repeat in range(0, 1):
         t = TwoImagesSeparation('input1', 'input2', input1, input2, num_iter=10000,
-                                output_folder='auni/output_multislice_constant_alpha_net_2e-1_rep{}/'.format(i_repeat), learning_rate=1e-3,
-                                input_type='noise', gamma_excl=2e-1, gamma_reg=0.5, blur=True, blur_type='net', device=device)
+                                output_folder='auni/_output_multislice_constant_alpha_blur_1e-1_rep{}/'.format(i_repeat), learning_rate=1e-3,
+                                input_type='noise', gamma_excl=1e-1, gamma_reg=0.5, blur=True, blur_type='filter', device=device)
         t.optimize()
         t.finalize()
 

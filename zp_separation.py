@@ -45,7 +45,7 @@ if __name__ == "__main__":
     #                   reg_threshold = 100 iters
     for i_repeat in range(0, 1):
         t = TwoImagesSeparation('input1', 'input2', input1, input2, num_iter=10000,
-                                output_folder='zp/output_multislice_constant_alpha_blur_4e-1_rep{}/'.format(i_repeat), learning_rate=1e-3,
-                                input_type='noise', gamma_excl=4e-1, gamma_reg=0.5, blur=True, blur_type='blur', device=device)
+                                output_folder='zp/output_multislice_constant_alpha_net_1e-2_rep{}/'.format(i_repeat), learning_rate=1e-3,
+                                input_type='noise', gamma_excl=1e-2, gamma_reg=0.5, blur=True, blur_type='net', device=device)
         t.optimize()
         t.finalize()

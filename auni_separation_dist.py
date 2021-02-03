@@ -12,14 +12,16 @@ import matplotlib
 matplotlib.use('TkAgg')
 import os
 from crosstalk_separation import *
+from mpi4py import MPI
 
+comm = MPI.COMM_WORLD
+n_ranks = comm.Get_size()
+rank = comm.Get_rank()
 
 if __name__ == "__main__":
 
-    input1 = dxchange.read_tiff('data/zp_0.tiff')
-    input2 = dxchange.read_tiff('data/zp_1.tiff')
-    img = np.stack([input1, input2], axis=2)
-    img = img[169:617, 169:617, :]
+    img = dxchange.read_tiff('data/au_ni.tiff')
+    img = img[114:114+272, 114:-114, :]
     img = np.transpose(img, (2, 0, 1))
     img = normalize(img)
 
@@ -31,11 +33,8 @@ if __name__ == "__main__":
     input1 = img[0].reshape([1, *img[0].shape])
     input2 = img[1].reshape([1, *img[1].shape])
 
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:{}'.format(rank % 2))
     torch.cuda.set_device(device)
-
-    # device = None
-    # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     # Separation from two images
     # Optimial paramas: (blur) gamma = 0.4
@@ -43,9 +42,13 @@ if __name__ == "__main__":
     #                   lr = 1e-3
     #                   gamma_reg = 0.5
     #                   reg_threshold = 100 iters
-    for i_repeat in range(0, 1):
-        t = TwoImagesSeparation('input1', 'input2', input1, input2, num_iter=10000,
-                                output_folder='zp/test_output_multislice_constant_alpha_blur_4e-1_rep{}/'.format(i_repeat), learning_rate=1e-3,
-                                input_type='noise', gamma_excl=4e-1, gamma_reg=0.5, blur=True, blur_type='blur', device=device)
-        t.optimize()
-        t.finalize()
+
+    gamma_ls = ['4e-2', '1e-1', '2e-1', '4e-1']
+
+    for gamma in gamma_ls[rank:len(gamma_ls):n_ranks]:
+        for i_repeat in range(0, 20):
+            t = TwoImagesSeparation('input1', 'input2', input1, input2, num_iter=10000,
+                                    output_folder='auni_dist/output_multislice_constant_alpha_net_{}_rep{}/'.format(gamma, i_repeat), learning_rate=1e-3,
+                                    input_type='noise', gamma_excl=float(gamma), gamma_reg=0.5, blur=True, blur_type='net', device=device)
+            t.optimize()
+            t.finalize()

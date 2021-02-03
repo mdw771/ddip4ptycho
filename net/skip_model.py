@@ -49,11 +49,14 @@ def skip(
         deeper = nn.Sequential()
         skip = nn.Sequential()
 
+        # Add deeper to model_tmp.
+        # model_tmp carries the parts of network built in previous iterations.
         if num_channels_skip[i] != 0:
             model_tmp.add(Concat(1, skip, deeper))
         else:
             model_tmp.add(deeper)
 
+        # Add batch norm at the beginning of this level's decoder arm to model_tmp, after Upsample
         model_tmp.add(bn(num_channels_skip[i] + (num_channels_up[i + 1] if i < last_scale else num_channels_down[i])))
 
         if num_channels_skip[i] != 0:
@@ -61,6 +64,7 @@ def skip(
             skip.add(bn(num_channels_skip[i]))
             skip.add(act(act_fun))
 
+        # Add this level's encoder arm to deeper
         deeper.add(conv(input_depth, num_channels_down[i], filter_size_down[i], 2, bias=need_bias, pad=pad,
                         downsample_mode=downsample_mode[i]))
         deeper.add(bn(num_channels_down[i]))
@@ -70,6 +74,8 @@ def skip(
         deeper.add(bn(num_channels_down[i]))
         deeper.add(act(act_fun))
 
+        # deeper_main is everything below the current level, including both encoder and decoder arms.
+        # deeper_main is filled recursively.
         deeper_main = nn.Sequential()
 
         if i == len(num_channels_down) - 1:
@@ -79,12 +85,21 @@ def skip(
             deeper.add(deeper_main)
             k = num_channels_up[i + 1]
 
+        # Add upsample to deeper
         deeper.add(nn.Upsample(scale_factor=2, mode=upsample_mode[i], align_corners=True))
 
+        # deeper now:
+        # C -> BN -> ACT -> C -> BN -> ACT -> deeper_main -> UP
+
+        # Add this level's decoder arm
         model_tmp.add(conv(num_channels_skip[i] + k, num_channels_up[i], filter_size_up[i], 1, bias=need_bias, pad=pad))
         model_tmp.add(bn(num_channels_up[i]))
         # model_tmp.add(layer_norm(num_channels_up[i]))
         model_tmp.add(act(act_fun))
+
+        # model_tmp now:
+        # Upper-levels -> deeper -> BN -> C -> BN -> ACT
+        #            \----> skip --/
 
         if need1x1_up:
             model_tmp.add(conv(num_channels_up[i], num_channels_up[i], 1, bias=need_bias, pad=pad))

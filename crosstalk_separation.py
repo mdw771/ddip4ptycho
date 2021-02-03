@@ -11,6 +11,8 @@ import dxchange
 import matplotlib
 matplotlib.use('TkAgg')
 import os
+import time
+from torchviz import make_dot
 
 TwoImagesSeparationResult = namedtuple("TwoImagesSeparationResult",
                                        ["reflection", "transmission", "psnr", "alpha1", "alpha2", "sum1", "sum2", "kernel1", "kernel2"])
@@ -99,6 +101,7 @@ class TwoImagesSeparation(object):
                                         filter_size_up=5,
                                         need_sigmoid=True, need_bias=True, pad='reflection', act_fun='LeakyReLU'
                                         ).type(self.dtype)
+                # print(self.filter_net1)
         self._init_all()
 
     def _init_all(self):
@@ -149,7 +152,7 @@ class TwoImagesSeparation(object):
             filter_size_down=5,
             filter_size_up=5,
             need_sigmoid=True, need_bias=True, pad=pad, act_fun='LeakyReLU')
-        print(reflection_net)
+        # print(reflection_net)
 
         self.reflection_net = reflection_net.type(data_type)
 
@@ -189,6 +192,7 @@ class TwoImagesSeparation(object):
         optimizer = torch.optim.Adam(self.parameters, lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 500, gamma=0.9)
         for j in range(self.num_iter):
+            # if j == 1: t0 = time.time()
             optimizer.zero_grad()
             self._optimization_closure(j)
             self._obtain_current_result(j)
@@ -196,6 +200,7 @@ class TwoImagesSeparation(object):
                 self._plot_closure(j)
             optimizer.step()
             scheduler.step()
+            # if j > 1: print((time.time() - t0) / j)
             # for param_group in optimizer.param_groups:
             #     print(param_group['lr'])
 
@@ -207,6 +212,8 @@ class TwoImagesSeparation(object):
 
         self.reflection_out = self.reflection_net(reflection_net_input)
         self.transmission_out = self.transmission_net(transmission_net_input)
+        # make_dot(self.transmission_out).render('model')
+        # raise
         alpha_net_input = self.alpha_net_input + (self.alpha_net_input.clone().normal_() * reg_noise_std)
         if self.constant_alpha:
             self.current_alpha = self.alpha(alpha_net_input)
@@ -294,6 +301,8 @@ class TwoImagesSeparation(object):
                                                                                     self.reg_loss.item(),
                                                                                     self.current_result.alpha1.item(),
                                                                                     self.current_result.alpha2.item()))
+
+        # print(torch.cuda.memory_allocated()/1024**2, torch.cuda.memory_cached()/1024**2, torch.cuda.max_memory_allocated()/1024**2, torch.cuda.max_memory_cached()/1024**2)
         if self.plot_during_training and step % self.show_every == self.show_every - 1:
             plot_image_grid("reflection_transmission_{}".format(step),
                             [self.current_result.reflection, self.current_result.transmission], output_path=self.output_folder)
